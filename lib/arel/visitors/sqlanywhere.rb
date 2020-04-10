@@ -6,7 +6,7 @@ module Arel
     o = order_hacks(o)
 
     is_distinct = using_distinct?(o)
-    
+
     o.limit = 1000000 if (o.offset && !o.limit)
     o.limit = o.limit.expr if(o.limit)
 
@@ -50,7 +50,7 @@ module Arel
         /DISTINCT/ === projection
       end
     end
-  end      
+  end
 
       # The functions (order_hacks, split_order_string) are based on the Oracle Enhacned ActiveRecord driver maintained by Raimonds Simanovskis (2010)
       # (https://github.com/rsim/oracle-enhanced)
@@ -103,6 +103,4 @@ module Arel
     end
   end
 end
-
-Arel::Visitors::VISITORS['sqlanywhere'] = Arel::Visitors::SQLAnywhere
 

@@ -5,7 +5,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-#                                                                               
+#
 #
 # http://www.apache.org/licenses/LICENSE-2.0
 #
@@ -33,8 +33,8 @@ class SA
   def initialize
     require 'sqlanywhere' unless defined? SQLAnywhere
     @api = SQLAnywhere::SQLAnywhereInterface.new()
-    raise LoadError, "Could not load SQLAnywhere DBCAPI library" if SQLAnywhere::API.sqlany_initialize_interface(@api) == 0 
-    raise LoadError, "Could not initialize SQLAnywhere DBCAPI library" if @api.sqlany_init() == 0 
+    raise LoadError, "Could not load SQLAnywhere DBCAPI library" if SQLAnywhere::API.sqlany_initialize_interface(@api) == 0
+    raise LoadError, "Could not initialize SQLAnywhere DBCAPI library" if @api.sqlany_init() == 0
   end
 end
 
@@ -44,27 +44,33 @@ module ActiveRecord
     # Main connection function to SQL Anywhere
     # Connection Adapter takes four parameters:
     # * :database (required, no default). Corresponds to "DatabaseName=" in connection string
-    # * :server (optional, defaults to :databse). Corresponds to "ServerName=" in connection string 
+    # * :server (optional, defaults to :databse). Corresponds to "ServerName=" in connection string
     # * :username (optional, default to 'dba')
     # * :password (optional, deafult to 'sql')
     # * :encoding (optional, defaults to charset of OS)
     # * :commlinks (optional). Corresponds to "CommLinks=" in connection string
     # * :connection_name (optional). Corresponds to "ConnectionName=" in connection string
-    
+
     def self.sqlanywhere_connection(config)
 
       config = DEFAULT_CONFIG.merge(config)
 
       raise ArgumentError, "No database name was given. Please add a :database option." unless config.has_key?(:database)
 
-      connection_string = "ServerName=#{(config[:server] || config[:database])};DatabaseName=#{config[:database]};UserID=#{config[:username]};Password=#{config[:password]};"
+			if config[:host]
+        connection_string = "Host=#{config[:host]}:#{config[:port]};"
+      else
+        connection_string = "ServerName=#{(config[:server] || config[:database])};"
+      end
+
+      connection_string += "DatabaseName=#{config[:database]};UserID=#{config[:username]};Password=#{config[:password]};"
       connection_string += "CommLinks=#{config[:commlinks]};" unless config[:commlinks].nil?
       connection_string += "ConnectionName=#{config[:connection_name]};" unless config[:connection_name].nil?
-      connection_string += "CharSet=#{config[:encoding]};" unless config[:encoding].nil?      
+      connection_string += "CharSet=#{config[:encoding]};" unless config[:encoding].nil?
       connection_string += "Idle=0" # Prevent the server from disconnecting us if we're idle for >240mins (by default)
 
       db = SA.instance.api.sqlany_new_connection()
-      
+
       ConnectionAdapters::SQLAnywhereAdapter.new(db, logger, connection_string)
     end
   end
@@ -80,7 +86,7 @@ module ActiveRecord
         @sql = sql
       end
     end
-  
+
     class SQLAnywhereColumn < Column
       private
         # Overridden to handle SQL Anywhere integer, varchar, binary, and timestamp types
@@ -97,12 +103,12 @@ module ActiveRecord
           case sql_type
             when /^tinyint/i
               1
-            when /^smallint/i 
+            when /^smallint/i
               2
-            when /^integer/i  
-              4            
-            when /^bigint/i   
-              8  
+            when /^integer/i
+              4
+            when /^bigint/i
+              8
             else super
           end
         end
@@ -114,7 +120,7 @@ module ActiveRecord
         def self.string_to_binary(value)
           "\\x" + value.unpack("H*")[0].scan(/../).join("\\x")
         end
-        
+
         def self.binary_to_string(value)
           value.gsub(/\\x[0-9]{2}/) { |byte| byte[2..3].hex }
         end
@@ -140,7 +146,7 @@ module ActiveRecord
       def requires_reloading?
         true
       end
-   
+
       def active?
         # The liveness variable is used a low-cost "no-op" to test liveness
         SA.instance.api.sqlany_execute_immediate(@connection, "SET liveness = 1") == 1
@@ -220,7 +226,7 @@ module ActiveRecord
         '0'
       end
 
-     
+
       # This function (distinct) is based on the Oracle Enhacned ActiveRecord driver maintained by Raimonds Simanovskis (2010)
       # (https://github.com/rsim/oracle-enhanced)
       def distinct(columns, order_by) #:nodoc:
@@ -240,7 +246,7 @@ module ActiveRecord
         end
         sql = "DISTINCT #{columns}, "
         sql << order_columns * ", "
-      end  
+      end
 
       # The database execution function
       def execute(sql, name = nil, binds = []) #:nodoc:
@@ -248,7 +254,7 @@ module ActiveRecord
           query(sql)
         else
           log(sql, name, binds) { query(sql) }
-        end        
+        end
       end
 
       def translate_exception(exception, message)
@@ -270,7 +276,7 @@ module ActiveRecord
         end
       end
 
-      # The database update function.         
+      # The database update function.
       def update_sql(sql, name = nil)
         execute( sql, name )
         return @affected_rows
@@ -287,7 +293,7 @@ module ActiveRecord
       # by immediatly querying the @@identity property. If the @@identity property is 0, then passed id_value is used
       def insert_sql(sql, name = nil, pk = nil, id_value = nil, sequence_name = nil) #:nodoc:
         execute(sql, name)
-        
+
         identity = SA.instance.api.sqlany_execute_direct(@connection, 'SELECT @@identity')
         raise ActiveRecord::StatementInvalid.new("#{SA.instance.api.sqlany_error(@connection)}:#{sql}") if identity.nil?
         SA.instance.api.sqlany_fetch_next(identity)
@@ -297,7 +303,7 @@ module ActiveRecord
         retval = id_value if retval == 0
         return retval
       end
-      
+
       # Returns a query as an array of arrays
       def select_rows(sql, name = nil)
         rs = SA.instance.api.sqlany_execute_direct(@connection, sql)
@@ -315,7 +321,7 @@ module ActiveRecord
         return record
       end
 
-      def begin_db_transaction #:nodoc:   
+      def begin_db_transaction #:nodoc:
         @auto_commit = false;
       end
 
@@ -342,7 +348,7 @@ module ActiveRecord
               when 1
                 column_type_sql = 'tinyint'
               when 2
-                column_type_sql = 'smallint'  
+                column_type_sql = 'smallint'
               when 3..4
                 column_type_sql = 'integer'
               when 5..8
@@ -353,7 +359,7 @@ module ActiveRecord
                column_type_sql
           elsif type == :string and !limit.nil?
              "varchar (#{limit} character)"
-          else 
+          else
             super(type, limit, precision, scale)
           end
         else
@@ -379,7 +385,7 @@ module ActiveRecord
         select(sql, name).map do |row|
           index = IndexDefinition.new(table_name, row['index_name'])
           index.unique = row['unique'] == 1
-          sql = "SELECT column_name FROM SYS.SYSIDX INNER JOIN SYS.SYSIDXCOL ON SYS.SYSIDXCOL.table_id = SYS.SYSIDX.table_id AND SYS.SYSIDXCOL.index_id = SYS.SYSIDX.index_id INNER JOIN SYS.SYSCOLUMN ON SYS.SYSCOLUMN.table_id = SYS.SYSIDXCOL.table_id AND SYS.SYSCOLUMN.column_id = SYS.SYSIDXCOL.column_id WHERE index_name = '#{row['index_name']}'"	
+          sql = "SELECT column_name FROM SYS.SYSIDX INNER JOIN SYS.SYSIDXCOL ON SYS.SYSIDXCOL.table_id = SYS.SYSIDX.table_id AND SYS.SYSIDXCOL.index_id = SYS.SYSIDX.index_id INNER JOIN SYS.SYSCOLUMN ON SYS.SYSCOLUMN.table_id = SYS.SYSIDXCOL.table_id AND SYS.SYSCOLUMN.column_id = SYS.SYSIDXCOL.column_id WHERE index_name = '#{row['index_name']}'"
           index.columns = select(sql).map { |col| col['column_name'] }
           index
         end
@@ -412,15 +418,15 @@ module ActiveRecord
           execute("UPDATE #{quote_table_name(table_name)} SET #{quote_column_name(column_name)}=#{quote(default)} WHERE #{quote_column_name(column_name)} IS NULL")
         end
         execute("ALTER TABLE #{quote_table_name(table_name)} ALTER #{quote_column_name(column_name)} #{null ? '' : 'NOT'} NULL")
-      end             
+      end
 
-      def change_column(table_name, column_name, type, options = {}) #:nodoc:         
+      def change_column(table_name, column_name, type, options = {}) #:nodoc:
         add_column_sql = "ALTER TABLE #{quote_table_name(table_name)} ALTER #{quote_column_name(column_name)} #{type_to_sql(type, options[:limit], options[:precision], options[:scale])}"
         add_column_options!(add_column_sql, options)
         add_column_sql << ' NULL' if options[:null]
         execute(add_column_sql)
       end
-       
+
       def rename_column(table_name, column_name, new_column_name) #:nodoc:
         execute "ALTER TABLE #{quote_table_name(table_name)} RENAME #{quote_column_name(column_name)} TO #{quote_column_name(new_column_name)}"
       end
@@ -428,7 +434,7 @@ module ActiveRecord
       def remove_column(table_name, column_name)
         sql = "SELECT \"index_name\" FROM SYS.SYSTAB join SYS.SYSTABCOL join SYS.SYSIDXCOL join SYS.SYSIDX WHERE \"column_name\" = '#{column_name}' AND \"table_name\" = '#{table_name}'"
         select(sql, nil).map do |row|
-          execute "DROP INDEX \"#{table_name}\".\"#{row['index_name']}\""      
+          execute "DROP INDEX \"#{table_name}\".\"#{row['index_name']}\""
         end
         execute "ALTER TABLE #{quote_table_name(table_name)} DROP #{quote_column_name(column_name)}"
       end
@@ -443,7 +449,7 @@ module ActiveRecord
         # This syntax is NOT supported by SQL Anywhere. In previous versions of this adapter this adapter simply
         # overrode the add_limit_offset function and added the appropriate TOP/START AT keywords to the start of the query.
         # However, this will not work for cases where add_limit_offset is being used in a subquery since add_limit_offset
-        # is called with the WHERE clause. 
+        # is called with the WHERE clause.
         #
         # As a result, the following function must be called before every SELECT statement against the database. It
         # recursivly walks through all subqueries in the SQL statment and replaces the instances of OFFSET/LIMIT with the
@@ -470,11 +476,11 @@ module ActiveRecord
                       subquery_sql = ""
                     end
                     modified_sql << x if nesting_level == 0
-                    subquery_sql << x if nesting_level > 0                         
+                    subquery_sql << x if nesting_level > 0
                   when 39  # single quote - '
                     in_single_quote = in_single_quote ^ true unless in_double_quote
                     modified_sql << x if nesting_level == 0
-                    subquery_sql << x if nesting_level > 0    
+                    subquery_sql << x if nesting_level > 0
                   when 34  # double quote - "
                     in_double_quote = in_double_quote ^ true unless in_single_quote
                     modified_sql << x if nesting_level == 0
@@ -493,7 +499,7 @@ module ActiveRecord
             select_components = modified_sql.scan(/\ASELECT\s+(DISTINCT)?(.*?)(?:\s+LIMIT\s+(.*?))?(?:\s+OFFSET\s+(.*?))?\Z/xmi)
             return modified_sql if select_components[0].nil?
             final_sql = "SELECT #{select_components[0][0]} "
-            final_sql << "TOP #{select_components[0][2].nil? ? 1000000 : select_components[0][2]} " 
+            final_sql << "TOP #{select_components[0][2].nil? ? 1000000 : select_components[0][2]} "
             final_sql << "START AT #{(select_components[0][3].to_i + 1).to_s} " unless select_components[0][3].nil?
             final_sql << "#{select_components[0][1]}"
             return final_sql
@@ -502,7 +508,7 @@ module ActiveRecord
           end
         end
 
-        # Queries the structure of a table including the columns names, defaults, type, and nullability 
+        # Queries the structure of a table including the columns names, defaults, type, and nullability
         # ActiveRecord uses the type to parse scale and precision information out of the types. As a result,
         # chars, varchars, binary, nchars, nvarchars must all be returned in the form <i>type</i>(<i>width</i>)
         # numeric and decimal must be returned in the form <i>type</i>(<i>width</i>, <i>scale</i>)
@@ -511,7 +517,7 @@ module ActiveRecord
 
         def table_structure(table_name)
           sql = <<-SQL
-SELECT SYS.SYSCOLUMN.column_name AS name, 
+SELECT SYS.SYSCOLUMN.column_name AS name,
   NULLIF(SYS.SYSCOLUMN."default", 'autoincrement') AS "default",
   IF SYS.SYSCOLUMN.domain_id IN (7,8,9,11,33,34,35,3,27) THEN
     IF SYS.SYSCOLUMN.domain_id IN (3,27) THEN
@@ -520,12 +526,12 @@ SELECT SYS.SYSCOLUMN.column_name AS name,
       SYS.SYSDOMAIN.domain_name || '(' || SYS.SYSCOLUMN.width || ')'
     ENDIF
   ELSE
-    SYS.SYSDOMAIN.domain_name 
-  ENDIF AS domain, 
+    SYS.SYSDOMAIN.domain_name
+  ENDIF AS domain,
   IF SYS.SYSCOLUMN.nulls = 'Y' THEN 1 ELSE 0 ENDIF AS nulls
-FROM 
-  SYS.SYSCOLUMN 
-  INNER JOIN SYS.SYSTABLE ON SYS.SYSCOLUMN.table_id = SYS.SYSTABLE.table_id 
+FROM
+  SYS.SYSCOLUMN
+  INNER JOIN SYS.SYSTABLE ON SYS.SYSCOLUMN.table_id = SYS.SYSTABLE.table_id
   INNER JOIN SYS.SYSDOMAIN ON SYS.SYSCOLUMN.domain_id = SYS.SYSDOMAIN.domain_id
 WHERE
   table_name = '#{table_name}'
@@ -534,7 +540,7 @@ SQL
           raise(ActiveRecord::StatementInvalid, "Could not find table '#{table_name}'") if structure == false
           structure
         end
-        
+
         # Required to prevent DEFAULT NULL being added to primary keys
         def options_include_default?(options)
           options.include?(:default) && !(options[:null] == false && options[:default].nil?)
@@ -573,9 +579,9 @@ SQL
             result, errstr = SA.instance.api.sqlany_error(@connection)
             raise SQLAnywhereException.new(errstr, result, sql)
           end
-        
+
           record = []
-          if( SA.instance.api.sqlany_num_cols(rs) > 0 ) 
+          if( SA.instance.api.sqlany_num_cols(rs) > 0 )
             while SA.instance.api.sqlany_fetch_next(rs) == 1
               max_cols = SA.instance.api.sqlany_num_cols(rs)
               result = Hash.new()
@@ -587,7 +593,7 @@ SQL
             @affected_rows = 0
           else
             @affected_rows = SA.instance.api.sqlany_affected_rows(rs)
-          end 
+          end
           SA.instance.api.sqlany_free_stmt(rs)
 
           SA.instance.api.sqlany_commit(@connection) if @auto_commit
